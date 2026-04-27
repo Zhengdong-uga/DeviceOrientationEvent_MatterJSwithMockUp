@@ -23,13 +23,13 @@
   .frame {
     width: 360px;
     height: 320px;
-    background: #EAE8E1; 
+    background: #EEEDE7; /* 更新为准确的米灰色 */
     border-radius: 36px; 
     position: relative;
     overflow: hidden;
     box-shadow: 0 8px 32px rgba(0,0,0,0.06);
 
-    /* 强制圆角裁剪 */
+    /* 强制圆角裁剪，防止穿模溢出 */
     -webkit-mask-image: -webkit-radial-gradient(white, black);
     mask-image: -webkit-radial-gradient(white, black);
     transform: translateZ(0); 
@@ -49,7 +49,7 @@
   }
 
   .badge-items {
-    background: #4B4C3A; 
+    background: #514D37; /* 更新为准确的深咖色 */
     color: #FFFFFF;
     padding: 6px 14px;
     border-radius: 20px;
@@ -90,7 +90,7 @@
   .enable-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(234, 232, 225, 0.85);
+    background: rgba(238, 237, 231, 0.85); /* 遮罩颜色也稍微匹配新背景 */
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
@@ -101,7 +101,7 @@
   }
   .enable-overlay.hidden { opacity: 0; pointer-events: none; }
   .enable-pill {
-    background: #4B4C3A;
+    background: #514D37; /* 更新为准确的深咖色 */
     color: #FFF;
     padding: 12px 24px;
     border-radius: 999px;
@@ -157,8 +157,7 @@
   let lastShakeTime = 0;
   let isSplit = false;
 
-  // 【核心修改】添加了 vScale (视觉缩放倍率)
-  // 物理碰撞盒 (w, h) 稍微做小，视觉图片 (vScale: 1.15 即放大 15%) 画大，就能完美吃掉瓶颈周围的间隙！
+  // 视觉参数配置 (w, h为物理盒子大小，vScale为视觉放大率用于消除缝隙)
   const initialBubbleConfigs = [
     { label: 'Plastic', texture: PLASTIC_URL, w: 100, h: 180, vScale: 1.15, drop: { x: W * 0.65, y: -200 } },
     { label: 'Glass', texture: GLASS_URL, w: 75, h: 145, vScale: 1.15, drop: { x: W * 0.3, y: -360 } },
@@ -170,12 +169,12 @@
 
     const body = Bodies.rectangle(x, y, cfg.w, cfg.h, {
       angle: randomAngle,
-      chamfer: { radius: Math.min(cfg.w, cfg.h) / 2.5 }, // 动态圆角，更加贴合胶囊形状
+      chamfer: { radius: Math.min(cfg.w, cfg.h) / 2.5 }, 
       restitution: 0.35,
       friction: 0.1,
       frictionAir: 0.015,
       density: 0.005,
-      render: { visible: false } // 如果你想看隐藏的物理边界，可以改成 true 试试
+      render: { visible: false } 
     });
     
     body.bubbleConfig = cfg;
@@ -186,7 +185,7 @@
     img.id = body.spriteId;
     img.src = cfg.texture;
     
-    // 渲染尺寸 = 物理尺寸 * vScale，视觉上“膨胀”一点覆盖间隙
+    // 渲染尺寸放大，填补瓶颈周围的空隙
     img.style.width = ((cfg.w * cfg.vScale) / W) * 100 + '%';
     img.style.height = ((cfg.h * cfg.vScale) / H) * 100 + '%';
     
@@ -203,7 +202,6 @@
     bubbles = bubbles.filter(b => b !== plasticBody);
     document.getElementById(plasticBody.spriteId)?.remove();
 
-    // 分裂后的新瓶子同样适用 vScale 规则
     const petBody  = createBubbleBody({ label: 'PET', texture: PET_URL, w: 75, h: 140, vScale: 1.15 }, pos.x - 25, pos.y);
     const hdpeBody = createBubbleBody({ label: 'HDPE', texture: HDPE_URL, w: 75, h: 140, vScale: 1.15 }, pos.x + 25, pos.y);
 
