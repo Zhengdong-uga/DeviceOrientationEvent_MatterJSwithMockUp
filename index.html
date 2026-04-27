@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>Bubble Breakdown — Prototype</title>
+<title>Bubble Breakdown — Optimized Physics</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -29,13 +29,13 @@
     overflow: hidden;
     box-shadow: 0 8px 32px rgba(0,0,0,0.06);
 
-    /* 强制圆角裁剪，防止图片跑到外面 */
+    /* 强制圆角裁剪 */
     -webkit-mask-image: -webkit-radial-gradient(white, black);
     mask-image: -webkit-radial-gradient(white, black);
     transform: translateZ(0); 
   }
 
-  /* 顶部 UI 栏 */
+  /* 顶部 UI */
   .header {
     position: absolute;
     top: 20px;
@@ -55,34 +55,25 @@
     border-radius: 20px;
     font-size: 14px;
     font-weight: 600;
-    text-transform: uppercase;
   }
 
   .badge-week {
     background: #FFFFFF;
-    color: #1A1A1A;
     padding: 6px 12px 6px 16px;
     border-radius: 20px;
     font-size: 14px;
-    font-weight: 500;
     display: flex;
     align-items: center;
     gap: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   }
 
-  .badge-week svg { width: 14px; height: 14px; }
-
   .canvas-wrap {
     width: 100%;
     height: 100%;
     position: relative;
   }
-  .canvas-wrap canvas {
-    display: block;
-    cursor: grab;
-    opacity: 0; 
-  }
+  .canvas-wrap canvas { display: block; cursor: grab; opacity: 0; }
 
   .sprite-layer {
     position: absolute;
@@ -94,8 +85,6 @@
     position: absolute;
     transform-origin: center center;
     will-change: transform;
-    /* 增加过渡让视觉变化更平滑 */
-    transition: width 0.2s, height 0.2s;
   }
 
   .enable-overlay {
@@ -103,14 +92,12 @@
     inset: 0;
     background: rgba(234, 232, 225, 0.85);
     backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 100;
     cursor: pointer;
     border-radius: inherit;
-    transition: opacity 0.3s;
   }
   .enable-overlay.hidden { opacity: 0; pointer-events: none; }
   .enable-pill {
@@ -119,26 +106,10 @@
     padding: 12px 24px;
     border-radius: 999px;
     font-weight: 600;
-    font-size: 14px;
   }
 
-  .hint {
-    font-size: 12px;
-    color: #8a8a8a;
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    text-align: center;
-  }
-  .reset {
-    background: #1a1a1a;
-    color: #fff;
-    border: none;
-    border-radius: 999px;
-    padding: 6px 14px;
-    font-size: 12px;
-    cursor: pointer;
-  }
+  .hint { font-size: 12px; color: #8a8a8a; display: flex; gap: 14px; align-items: center; }
+  .reset { background: #1a1a1a; color: #fff; border: none; border-radius: 999px; padding: 6px 14px; font-size: 12px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -146,12 +117,7 @@
   <div class="frame">
     <div class="header">
       <div class="badge-items">88 ITEMS</div>
-      <div class="badge-week">
-        Week
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-      </div>
+      <div class="badge-week">Week <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
     </div>
 
     <div class="canvas-wrap" id="canvas-container">
@@ -163,7 +129,7 @@
   </div>
 
   <div class="hint">
-    <span>点击 Plastic 分裂 · 倾斜手机滚动</span>
+    <span>点击 Plastic 分裂 · 随机角度下落</span>
     <button class="reset" id="reset">Reset</button>
   </div>
 
@@ -191,52 +157,27 @@
   let lastShakeTime = 0;
   let isSplit = false;
 
-  // 【核心修改】大幅缩小了碰撞半径 radius，让它们贴得更紧密
+  // 【核心修改】添加了 vScale (视觉缩放倍率)
+  // 物理碰撞盒 (w, h) 稍微做小，视觉图片 (vScale: 1.15 即放大 15%) 画大，就能完美吃掉瓶颈周围的间隙！
   const initialBubbleConfigs = [
-    {
-      label: 'Plastic', texture: PLASTIC_URL,
-      assetW: 157, assetH: 285, scale: 0.85, 
-      radius: 72, // 从 95 缩小到 72
-      drop: { x: W * 0.7, y: -200 }
-    },
-    {
-      label: 'Glass', texture: GLASS_URL,
-      assetW: 223, assetH: 185, scale: 0.75, 
-      radius: 65, // 从 85 缩小到 65
-      drop: { x: W * 0.3, y: -360 }
-    },
-    {
-      label: 'Metal', texture: METAL_URL,
-      assetW: 126, assetH: 149, scale: 0.75, 
-      radius: 46, // 从 55 缩小到 46
-      drop: { x: W * 0.5, y: -500 }
-    },
+    { label: 'Plastic', texture: PLASTIC_URL, w: 100, h: 180, vScale: 1.15, drop: { x: W * 0.65, y: -200 } },
+    { label: 'Glass', texture: GLASS_URL, w: 75, h: 145, vScale: 1.15, drop: { x: W * 0.3, y: -360 } },
+    { label: 'Metal', texture: METAL_URL, w: 65, h: 100, vScale: 1.12, drop: { x: W * 0.5, y: -500 } },
   ];
 
-  function handleMotion(e) {
-    const ag = e.accelerationIncludingGravity;
-    if (!ag || ag.x == null) return;
-    const SCALE = 0.22;
-    targetGravity.x = Math.max(-3.5, Math.min(3.5, ag.x * SCALE));
-    targetGravity.y = Math.max(-3.5, Math.min(3.5, -ag.y * SCALE));
-    
-    if (prevAg && bubbles.length) {
-      const dx = ag.x - prevAg.x;
-      const dy = ag.y - prevAg.y;
-      const jerk = Math.sqrt(dx*dx + dy*dy);
-      if (jerk > 8 && performance.now() - lastShakeTime > 40) {
-        bubbles.forEach(body => Body.applyForce(body, body.position, { x: dx * 0.002, y: -dy * 0.002 }));
-        lastShakeTime = performance.now();
-      }
-    }
-    prevAg = { x: ag.x, y: ag.y, z: ag.z };
-  }
-
   function createBubbleBody(cfg, x, y) {
-    const body = Bodies.circle(x, y, cfg.radius, {
-      restitution: 0.3, friction: 0.05, frictionAir: 0.02, density: 0.005,
-      render: { visible: false }
+    const randomAngle = Math.random() * Math.PI * 2;
+
+    const body = Bodies.rectangle(x, y, cfg.w, cfg.h, {
+      angle: randomAngle,
+      chamfer: { radius: Math.min(cfg.w, cfg.h) / 2.5 }, // 动态圆角，更加贴合胶囊形状
+      restitution: 0.35,
+      friction: 0.1,
+      frictionAir: 0.015,
+      density: 0.005,
+      render: { visible: false } // 如果你想看隐藏的物理边界，可以改成 true 试试
     });
+    
     body.bubbleConfig = cfg;
     body.spriteId = 's_' + Math.random().toString(36).substr(2, 9);
 
@@ -244,13 +185,17 @@
     img.className = 'sprite';
     img.id = body.spriteId;
     img.src = cfg.texture;
-    img.style.width  = (cfg.assetW * cfg.scale / W) * 100 + '%';
-    img.style.height = (cfg.assetH * cfg.scale / H) * 100 + '%';
+    
+    // 渲染尺寸 = 物理尺寸 * vScale，视觉上“膨胀”一点覆盖间隙
+    img.style.width = ((cfg.w * cfg.vScale) / W) * 100 + '%';
+    img.style.height = ((cfg.h * cfg.vScale) / H) * 100 + '%';
+    
     spriteLayer.appendChild(img);
     return body;
   }
 
   function splitPlastic(plasticBody) {
+    if (isSplit) return;
     isSplit = true;
     const pos = { ...plasticBody.position };
     
@@ -258,25 +203,37 @@
     bubbles = bubbles.filter(b => b !== plasticBody);
     document.getElementById(plasticBody.spriteId)?.remove();
 
-    // 【核心修改】调大了 scale 让分裂后的瓶子不至于太小，同时控制 radius
-    const petConfig  = { label: 'PET',  texture: PET_URL,  assetW: 157, assetH: 285, scale: 0.75, radius: 56 };
-    const hdpeConfig = { label: 'HDPE', texture: HDPE_URL, assetW: 157, assetH: 285, scale: 0.75, radius: 56 };
+    // 分裂后的新瓶子同样适用 vScale 规则
+    const petBody  = createBubbleBody({ label: 'PET', texture: PET_URL, w: 75, h: 140, vScale: 1.15 }, pos.x - 25, pos.y);
+    const hdpeBody = createBubbleBody({ label: 'HDPE', texture: HDPE_URL, w: 75, h: 140, vScale: 1.15 }, pos.x + 25, pos.y);
 
-    const petBody  = createBubbleBody(petConfig, pos.x - 15, pos.y);
-    const hdpeBody = createBubbleBody(hdpeConfig, pos.x + 15, pos.y);
-
-    // 减轻分裂爆炸的力度，防止跑得太远
-    Body.setVelocity(petBody,  { x: -3, y: -4 });
-    Body.setVelocity(hdpeBody, { x: 3,  y: -4 });
+    Body.setVelocity(petBody,  { x: -4, y: -5 });
+    Body.setVelocity(hdpeBody, { x: 4,  y: -5 });
 
     bubbles.push(petBody, hdpeBody);
     Composite.add(engine.world, [petBody, hdpeBody]);
 
     bubbles.forEach(body => {
       const el = document.getElementById(body.spriteId);
-      if (body.bubbleConfig.label === 'Glass') { el.src = GLASS2_URL; }
-      else if (body.bubbleConfig.label === 'Metal') { el.src = METAL2_URL; }
+      if (body.bubbleConfig.label === 'Glass') el.src = GLASS2_URL;
+      else if (body.bubbleConfig.label === 'Metal') el.src = METAL2_URL;
     });
+  }
+
+  function handleMotion(e) {
+    const ag = e.accelerationIncludingGravity;
+    if (!ag || ag.x == null) return;
+    targetGravity.x = Math.max(-3.5, Math.min(3.5, ag.x * 0.22));
+    targetGravity.y = Math.max(-3.5, Math.min(3.5, -ag.y * 0.22));
+    
+    if (prevAg && bubbles.length) {
+      const dx = ag.x - prevAg.x, dy = ag.y - prevAg.y;
+      if (Math.sqrt(dx*dx + dy*dy) > 8 && performance.now() - lastShakeTime > 40) {
+        bubbles.forEach(body => Body.applyForce(body, body.position, { x: dx * 0.002, y: -dy * 0.002 }));
+        lastShakeTime = performance.now();
+      }
+    }
+    prevAg = { x: ag.x, y: ag.y, z: ag.z };
   }
 
   function init() {
@@ -284,30 +241,23 @@
     isSplit = false; spriteLayer.innerHTML = ''; bubbles = [];
 
     engine = Engine.create({ positionIterations: 12, velocityIterations: 10 });
-    engine.gravity.y = 0.9;
-
-    render = Render.create({
-      element: container, engine: engine,
-      options: { width: W, height: H, wireframes: false, background: 'transparent', pixelRatio: window.devicePixelRatio || 1 }
-    });
+    render = Render.create({ element: container, engine: engine, options: { width: W, height: H, wireframes: false, background: 'transparent', pixelRatio: window.devicePixelRatio || 1 } });
 
     const wallOpts = { isStatic: true, render: { visible: false }, friction: 0.3 };
-    const ground = Bodies.rectangle(W/2, H+50, W+200, 100, wallOpts);
-    const leftW  = Bodies.rectangle(-50, H/2, 100, H+200, wallOpts);
-    const rightW = Bodies.rectangle(W+50, H/2, 100, H+200, wallOpts);
-    const ceiling = Bodies.rectangle(W/2, -50, W+200, 100, { isStatic: true, render: { visible: false }, collisionFilter: { mask: 0x0000 } });
-    Composite.add(engine.world, [ground, leftW, rightW, ceiling]);
+    Composite.add(engine.world, [
+      Bodies.rectangle(W/2, H+50, W+200, 100, wallOpts),
+      Bodies.rectangle(-50, H/2, 100, H+200, wallOpts),
+      Bodies.rectangle(W+50, H/2, 100, H+200, wallOpts),
+      Bodies.rectangle(W/2, -50, W+200, 100, { isStatic: true, render: { visible: false }, collisionFilter: { mask: 0x0000 } })
+    ]);
 
     bubbles = initialBubbleConfigs.map(cfg => createBubbleBody(cfg, cfg.drop.x, cfg.drop.y));
     Composite.add(engine.world, bubbles);
 
-    const mouse = Mouse.create(render.canvas);
-    mouse.pixelRatio = window.devicePixelRatio || 1;
-    const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } });
+    const mouseConstraint = MouseConstraint.create(engine, { mouse: Mouse.create(render.canvas), constraint: { stiffness: 0.1, render: { visible: false } } });
     Composite.add(engine.world, mouseConstraint);
 
     Events.on(mouseConstraint, 'mousedown', (e) => {
-      if (isSplit) return;
       const clicked = Matter.Query.point(bubbles, e.mouse.position);
       if (clicked.length && clicked[0].bubbleConfig.label === 'Plastic') splitPlastic(clicked[0]);
     });
@@ -315,21 +265,14 @@
     Events.on(engine, 'beforeUpdate', () => {
       engine.gravity.x += (targetGravity.x - engine.gravity.x) * 0.2;
       engine.gravity.y += (targetGravity.y - engine.gravity.y) * 0.2;
-      
-      let allEntered = true;
       bubbles.forEach(body => {
-        const r = body.bubbleConfig.radius;
-        if (!body.hasEntered && body.position.y > r) body.hasEntered = true;
-        if (!body.hasEntered) allEntered = false;
-        
+        if (!body.hasEntered && body.position.y > 0) body.hasEntered = true;
         if (body.hasEntered) {
-          let { x, y } = body.position;
-          if (x < r) Body.setPosition(body, { x: r, y });
-          if (x > W - r) Body.setPosition(body, { x: W - r, y });
-          if (y > H - r) Body.setPosition(body, { x, y: H - r });
+            const {x, y} = body.position;
+            if (x < 20) Body.setPosition(body, {x: 20, y});
+            if (x > W-20) Body.setPosition(body, {x: W-20, y});
         }
       });
-      if (allEntered) ceiling.collisionFilter.mask = 0xFFFFFFFF;
     });
 
     Events.on(render, 'afterRender', () => {
@@ -355,12 +298,12 @@
   if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
     overlay.classList.remove('hidden');
     overlay.addEventListener('click', async () => {
-      const res = await DeviceMotionEvent.requestPermission();
-      if (res === 'granted') { window.addEventListener('devicemotion', handleMotion); overlay.classList.add('hidden'); }
+      if (await DeviceMotionEvent.requestPermission() === 'granted') {
+        window.addEventListener('devicemotion', handleMotion);
+        overlay.classList.add('hidden');
+      }
     });
-  } else {
-    window.addEventListener('devicemotion', handleMotion);
-  }
+  } else { window.addEventListener('devicemotion', handleMotion); }
 </script>
 </body>
 </html>
